@@ -1,5 +1,3 @@
-from __future__ import annotations
+# Path: core/__init__.py
 
-
-def hello() -> str:
-    return "hello"
+__all__ = []
