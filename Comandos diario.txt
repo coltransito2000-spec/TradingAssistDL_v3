@@ -1,0 +1,28 @@
+cd F:\TradingAssistDL_v3
+
+# 0) activar entorno
+mamba activate tradingassistdl
+
+# 1) descargar datos de ejemplo (AAPL 18m)
+python - << 'PY'
+import yfinance as yf, pandas as pd
+df = yf.download("AAPL", period="18mo", auto_adjust=False, progress=False)
+df.to_csv("data/aapl_raw.csv")
+print("OK -> data/aapl_raw.csv", df.shape)
+PY
+
+# 2) features (con tu calculator)
+python - << 'PY'
+import pandas as pd
+from core.features.calculator import calculate_technical_features
+df = pd.read_csv("data/aapl_raw.csv")
+df = df.rename(columns=str.lower)
+df.rename(columns={"date":"ts"}, inplace=True)
+df["ticker"] = "AAPL"
+fe = calculate_technical_features(df)
+fe.to_csv("data/aapl_features.csv", index=False)
+print("OK -> data/aapl_features.csv", fe.shape)
+PY
+
+# 3) correr tests
+pytest -q
