@@ -6,14 +6,18 @@ from core.features.calculator import calculate_technical_features
 
 
 def test_calculate_technical_features_smoke():
-    """Smoke test: asegura que los features se calculan sin romper."""
-    df = yf.download("AAPL", period="3mo", auto_adjust=False, progress=False).reset_index()
+    """
+    Smoke test: asegura que los features se calculan sin romper y
+    que tenemos suficientes filas incluso con SMA200.
+    """
+    # Usamos 18 meses para garantizar >200 velas (SMA200 necesita 200)
+    df = yf.download("AAPL", period="18mo", auto_adjust=False, progress=False).reset_index()
     df = df.rename(columns=str.lower)
     df.rename(columns={"date": "ts"}, inplace=True)
     df["ticker"] = "AAPL"
 
     features = calculate_technical_features(df)
 
-    assert not features.empty, "❌ Features vacíos"
+    assert not features.empty, "❌ Features vacíos (revisa ventana temporal y columnas)"
     for col in ["atr_14", "rsi_14", "sma_20", "sma_50", "sma_200"]:
         assert col in features.columns, f"❌ Falta columna {col}"

@@ -80,7 +80,8 @@ def calculate_technical_features(df: pd.DataFrame) -> pd.DataFrame:
     price["sma_50"] = ta.trend.SMAIndicator(price["close"], window=50).sma_indicator()
     price["sma_200"] = ta.trend.SMAIndicator(price["close"], window=200).sma_indicator()
 
-    price = price.dropna()
+    # 🔽 En vez de dropna total, exigimos solo que los indicadores "rápidos" existan
+    price = price.dropna(subset=["atr_14", "rsi_14"])
 
     # 4) Base para merge: asegura columnas planas y únicas
     if "ticker" not in df.columns:
