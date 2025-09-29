@@ -1,28 +1,43 @@
+# Path: core/features/calculator.py
+
 import pandas as pd
 import ta
 
 
 def _normalize_ohlc(df: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza columnas OHLCV, aplanando MultiIndex y usando 'adj close' como 'close'."""
     df = df.copy()
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = [c[0] for c in df.columns]
+
     df = df.rename(columns=str.lower)
+
+    # Usa Adj Close como referencia principal para 'close'
     if "adj close" in df.columns:
         if "close" in df.columns:
             df = df.drop(columns=["close"])
         df["close"] = df["adj close"]
         df = df.drop(columns=["adj close"])
+
     df = df.loc[:, ~df.columns.duplicated()]
+
     for c in ["open", "high", "low", "close", "volume"]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
+
     return df
 
 
 def calculate_technical_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calcula indicadores técnicos básicos:
+    ATR(14), RSI(14), SMA(20), SMA(50), SMA(200).
+    """
     if df.empty:
         return df
+
     df = df.sort_values("ts").copy()
+
     price_cols = [c for c in ["ts", "open", "high", "low", "close", "volume"] if c in df.columns]
     price = _normalize_ohlc(df[price_cols].set_index("ts")).reset_index()
 
@@ -35,6 +50,7 @@ def calculate_technical_features(df: pd.DataFrame) -> pd.DataFrame:
     price["sma_200"] = ta.trend.SMAIndicator(price["close"], window=200).sma_indicator()
 
     price = price.dropna()
+
     out = df[["ts", "ticker"]].merge(
         price[["ts", "atr_14", "rsi_14", "sma_20", "sma_50", "sma_200"]],
         on="ts",

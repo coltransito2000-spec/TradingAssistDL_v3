@@ -1,3 +1,5 @@
+# Path: pyproject.toml
+
 [tool.black]
 line-length = 100
 target-version = ["py311"]
@@ -10,6 +12,8 @@ multi_line_output = 3
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-select = ["F", "E", "I"]  # errores, pep8, import order
+
+[tool.ruff.lint]
+select = ["F", "E", "I"]
 ignore = []
-fix = true
+fixable = ["ALL"]
