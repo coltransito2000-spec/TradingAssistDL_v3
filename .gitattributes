@@ -1,0 +1,4 @@
+# Crea/reescribe el archivo con el contenido correcto
+@'
+* text=auto eol=lf
+'@ | Set-Content -Path .gitattributes -Encoding ASCII
