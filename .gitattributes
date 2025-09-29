@@ -1,1 +1,29 @@
-* text=auto eol=lf
+# Path: .gitattributes
+*         text=auto eol=lf
+
+# Windows batch files mantienen CRLF
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+
+# Archivos *nix aseguran LF
+*.sh      text eol=lf
+
+# Archivos de código (forzamos LF)
+*.py      text eol=lf
+*.ps1     text eol=lf
+*.toml    text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.json    text eol=lf
+*.md      text eol=lf
+*.sql     text eol=lf
+
+# Binarios (sin normalización)
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.pdf     binary
+*.zip     binary
+*.gz      binary
+*.h5      binary
