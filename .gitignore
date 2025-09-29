@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+
+# Virtual env / conda
+.env
+.venv/
+.conda/
+conda-meta/
+*.lock
+*.conda
+*.tar.bz2
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# Data / artifacts
+artifacts/
+data/
+logs/
+**/.DS_Store
+
+# Credenciales locales
+.env.local
+.env.*.local

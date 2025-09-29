@@ -1,0 +1,11 @@
+cd F:\TradingAssistDL_v3
+
+conda activate tradingassistdl
+
+
+
+
+C:\Users\LArevalo\miniforge3
+
+
+
