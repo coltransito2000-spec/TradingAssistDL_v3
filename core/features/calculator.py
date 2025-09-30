@@ -1,26 +1,44 @@
-# Path: core/features/calculator.py
+# -*- coding: utf-8 -*-
+# path: core/features/calculator.py
+"""
+Calcula features técnicos SIN librerías externas (usa common.utils).
+
+Entrada:
+    DataFrame OHLCV con columnas: ts, open, high, low, close, volume, (opcional) ticker
+
+Salida:
+    DataFrame con indicadores:
+      - ATR(14): atr_14
+      - RSI(14): rsi_14
+      - SMA(20/50/200): sma_20, sma_50, sma_200
+      - MACD(12,26,9): macd, macd_signal, macd_hist
+
+Ejemplo CLI (líneas cortas para ruff):
+    python -m core.features.calculator --input data/prices_ohlcv/AAPL.csv \
+                                       --output data/features/AAPL.feat.csv
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+from typing import Optional
 
 import pandas as pd
-import ta
+
+from common.utils import atr, macd, rsi, sma
+
+DATA_DIR = Path("data")
+PRICES_DIR = DATA_DIR / "prices_ohlcv"
+FEATURES_DIR = DATA_DIR / "features"
+FEATURES_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Aplana columnas MultiIndex -> nivel 0 (primero)."""
+def _ensure_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza nombres y asegura 'close' preferida desde 'adj close' si existe."""
     if isinstance(df.columns, pd.MultiIndex):
-        df = df.copy()
-        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
-    return df
+        df.columns = [c[0] for c in df.columns]
 
-
-def _normalize_ohlc(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Normaliza columnas OHLCV:
-    - Aplana MultiIndex si existe.
-    - Pasa a minúsculas.
-    - Usa 'adj close' como 'close' (evita saltos por dividendos/splits).
-    - Convierte a numérico (coerce) y dedup de columnas.
-    """
-    df = _flatten_columns(df).copy()
     df = df.rename(columns=str.lower)
 
     if "adj close" in df.columns:
@@ -29,70 +47,84 @@ def _normalize_ohlc(df: pd.DataFrame) -> pd.DataFrame:
         df["close"] = df["adj close"]
         df = df.drop(columns=["adj close"])
 
-    df = df.loc[:, ~df.columns.duplicated()]
-
-    for c in ["open", "high", "low", "close", "volume"]:
+    # tipa numéricos
+    for c in ("open", "high", "low", "close", "volume"):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
+    # fecha/hora
+    if "ts" in df.columns:
+        df["ts"] = pd.to_datetime(df["ts"], utc=True, errors="coerce")
+
+    # elimina duplicados de nombre de columna, si hubiera
+    df = df.loc[:, ~df.columns.duplicated()]
     return df
 
 
-def _normalize_base(df: pd.DataFrame) -> pd.DataFrame:
+def calculate_technical_features(df: pd.DataFrame, dropna_mode: str = "partial") -> pd.DataFrame:
     """
-    Normaliza el df base para asegurar que ['ts','ticker'] sean columnas planas
-    y sin MultiIndex.
-    """
-    df = _flatten_columns(df).copy()
-    df = df.rename(columns=str.lower)
-    return df
+    Calcula indicadores técnicos con utilidades puras (common.utils).
 
-
-def calculate_technical_features(df: pd.DataFrame) -> pd.DataFrame:
+    dropna_mode:
+      - 'partial': elimina filas donde falte SMA200, conserva precio
+      - 'full': elimina filas con cualquier NaN
+      - 'none': no elimina (puedes imputar después)
     """
-    Calcula indicadores técnicos básicos:
-    ATR(14), RSI(14), SMA(20), SMA(50), SMA(200).
-
-    Requisitos mínimos de entrada:
-    - df tiene columnas de precio: open/high/low/(adj close|close)/volume
-    - df tiene 'ts' (timestamp/fecha) y 'ticker'
-    """
+    df = _ensure_columns(df)
     if df.empty:
         return df
 
-    # 1) Normaliza df base (aplana columnas y minúsculas) antes de cualquier selección
-    df = _normalize_base(df).sort_values("ts").copy()
+    required = {"ts", "high", "low", "close"}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(f"Faltan columnas requeridas: {missing}")
 
-    # 2) Construye dataframe de precios normalizado (OHLCV)
-    price_cols = [
-        c for c in ["ts", "open", "high", "low", "close", "adj close", "volume"] if c in df.columns
-    ]
-    if "ts" not in price_cols:
-        raise ValueError("❌ Falta columna 'ts' en el DataFrame de entrada.")
-    price = _normalize_ohlc(df[price_cols].set_index("ts")).reset_index()
+    df = df.sort_values("ts").set_index("ts")
 
-    # 3) Calcula indicadores
-    price["atr_14"] = ta.volatility.AverageTrueRange(
-        price["high"], price["low"], price["close"], window=14
-    ).average_true_range()
-    price["rsi_14"] = ta.momentum.RSIIndicator(price["close"], window=14).rsi()
-    price["sma_20"] = ta.trend.SMAIndicator(price["close"], window=20).sma_indicator()
-    price["sma_50"] = ta.trend.SMAIndicator(price["close"], window=50).sma_indicator()
-    price["sma_200"] = ta.trend.SMAIndicator(price["close"], window=200).sma_indicator()
+    # Indicadores
+    df["atr_14"] = atr(df["high"], df["low"], df["close"], n=14)
+    df["rsi_14"] = rsi(df["close"], n=14)
+    df["sma_20"] = sma(df["close"], n=20)
+    df["sma_50"] = sma(df["close"], n=50)
+    df["sma_200"] = sma(df["close"], n=200)
 
-    # 🔽 En vez de dropna total, exigimos solo que los indicadores "rápidos" existan
-    price = price.dropna(subset=["atr_14", "rsi_14"])
-
-    # 4) Base para merge: asegura columnas planas y únicas
-    if "ticker" not in df.columns:
-        raise ValueError("❌ Falta columna 'ticker' en el DataFrame de entrada.")
-    base = df[["ts", "ticker"]].drop_duplicates()
-
-    # 5) Merge final
-    out = base.merge(
-        price[["ts", "atr_14", "rsi_14", "sma_20", "sma_50", "sma_200"]],
-        on="ts",
-        how="inner",
+    macd_df = macd(df["close"], fast=12, slow=26, signal=9).rename(
+        columns={"signal": "macd_signal", "hist": "macd_hist"}
     )
+    df = pd.concat([df, macd_df], axis=1)
 
-    return out
+    df = df.reset_index()
+
+    if dropna_mode == "partial":
+        return df.dropna(subset=["sma_200"]).reset_index(drop=True)
+    if dropna_mode == "full":
+        return df.dropna().reset_index(drop=True)
+    return df.reset_index(drop=True)
+
+
+def _cli(input_csv: Path, output_csv: Optional[Path], dropna_mode: str) -> None:
+    df = pd.read_csv(input_csv)
+    feats = calculate_technical_features(df, dropna_mode=dropna_mode)
+    if output_csv is None:
+        output_csv = FEATURES_DIR / (input_csv.stem + ".features.csv")
+    feats.to_csv(output_csv, index=False)
+    print(f"✅ Features escritos en: {output_csv} | filas={len(feats)}")
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description="Calcula features técnicos.")
+    p.add_argument("--input", type=Path, required=True, help="CSV OHLCV con columna 'ts'")
+    p.add_argument("--output", type=Path, default=None, help="CSV de salida para features")
+    p.add_argument(
+        "--dropna-mode",
+        type=str,
+        default="partial",
+        choices=("partial", "full", "none"),
+        help="Tratamiento de NaNs (default: partial)",
+    )
+    args = p.parse_args()
+    _cli(args.input, args.output, args.dropna_mode)
+
+
+if __name__ == "__main__":
+    main()
